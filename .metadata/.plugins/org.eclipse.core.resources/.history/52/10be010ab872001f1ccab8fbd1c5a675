@@ -1,0 +1,299 @@
+/*
+ * main.c
+ *
+ *  Created on: Sep 11, 2024
+ *      Author: yahia raouf
+ */
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
+unsigned char sec = 00;
+unsigned char min = 00;
+unsigned char hrs = 00;
+
+unsigned char pauseFlag = 0;
+
+unsigned char countDownFlag = 0b00000000;
+
+unsigned char modeFlag = 0;
+
+unsigned char lapFlag = 0;
+
+unsigned char hrsInc = 0;
+unsigned char hrsDec = 0;
+unsigned char minInc = 0;
+unsigned char minDec = 0;
+unsigned char secInc = 0;
+unsigned char secDec = 0;
+
+unsigned char lapSec = 0;
+unsigned char lapMin = 0;
+unsigned char lapHrs = 0;
+
+ISR(TIMER1_COMPA_vect) {
+	if (countDownFlag == 0) {
+
+		TCCR1B |= (1 << CS10) | (1 << CS12);
+		PORTD &= ~(1 << PD0);
+
+		sec++;
+		if (sec == 60) {
+			min++;
+			sec = 0;
+		}
+
+		if (min == 60) {
+			hrs++;
+			min = 0;
+		}
+
+		if (hrs == 99) {
+			TCCR1B &= ~(1 << CS10) & ~(1 << CS12);
+		}
+	}
+
+	if (countDownFlag == 1) {
+		if (hrs == 0 && min == 0 && sec == 0) {
+			TCCR1B &= ~(1 << CS10) & ~(1 << CS12);
+			PORTD |= (1 << PD0);
+		} else
+			sec--;
+		if ((min != 0) && (sec == 1)) {
+			min--;
+			sec = 59;
+		}
+
+		if ((hrs != 0) && (min == 0)) {
+			hrs--;
+			min = 59;
+		}
+
+	}
+}
+
+ISR(INT0_vect) {
+	sec = 0;
+	min = 0;
+	hrs = 0;
+}
+
+ISR(INT1_vect) {
+	TCCR1B &= ~(1 << CS10) & ~(1 << CS12);
+	pauseFlag = 1;
+}
+
+ISR(INT2_vect) {
+	TCCR1B |= (1 << CS12) | (1 << CS10);
+	pauseFlag = 0;
+}
+
+void Timer1_CTC_Init() {
+	TCCR1A = (1 << FOC1A);
+	TCCR1B |= (1 << WGM12) | (1 << CS12) | (1 << CS10);
+	TCNT1 = 0;
+	OCR1A = 15625;
+	TIMSK |= (1 << OCIE1A);
+}
+
+void Int0_init() {
+	MCUCR |= (1 << ISC11);
+	GICR |= (1 << INT0);
+}
+
+void Int1_init() {
+	MCUCR |= (1 << ISC11) | (1 << ISC00);
+	GICR |= (1 << INT1);
+}
+
+void Int2_init() {
+	GICR |= (1 << INT2);
+}
+
+void display_7Segment(unsigned char num, unsigned char segment, unsigned char lap) {
+	PORTA = (PORTA & 0x00) | (1 << segment);
+	PORTC = (PORTC & 0x00) | (num & 0x0F);
+	PORTC = (PORTC & 0x00) | (lap & 0x0F);
+}
+
+void lap() {
+
+if (!(PIND & (1 << PD6))) {
+	_delay_ms(30);
+	if (!(PIND & (1 << PD6))) {
+		if (lapFlag == 0) {
+			lapSec = sec;
+			lapMin = min;
+			lapHrs = hrs;
+			lapFlag = 1;
+		}
+	}
+} else
+	lapFlag = 0;
+}
+
+void hrsIncrement() {
+if (!(PINB & (1 << PB1))) {
+	_delay_ms(30);
+	if (!(PINB & (1 << PB1))) {
+		if (hrsInc == 0) {
+			if (hrs == 99) {
+				hrs = 99;
+			} else
+				hrs++;
+			hrsInc = 1;
+		}
+
+	}
+
+} else
+	hrsInc = 0;
+}
+
+void hrsDecrement() {
+if (!(PINB & (1 << PB0))) {
+	_delay_ms(30);
+	if (!(PINB & (1 << PB0))) {
+		if (hrsDec == 0) {
+			if (hrs != 0) {
+				hrs--;
+			}
+			hrsDec = 1;
+		}
+	}
+
+} else
+	hrsDec = 0;
+}
+
+void minIncrement() {
+if (!(PINB & (1 << PB4))) {
+	_delay_ms(30);
+	if (!(PINB & (1 << PB4))) {
+		if (minInc == 0) {
+			if (min == 59) {
+				min = 0;
+				hrs++;
+			} else
+				min++;
+			minInc = 1;
+		}
+
+	}
+
+} else
+	minInc = 0;
+}
+
+void minDecrement() {
+if (!(PINB & (1 << PB3))) {
+	_delay_ms(30);
+	if (!(PINB & (1 << PB3))) {
+		if (minDec == 0) {
+			if (min != 0) {
+				min--;
+			}
+			minDec = 1;
+		}
+
+	}
+
+} else
+	minDec = 0;
+}
+
+void secIncrement() {
+if (!(PINB & (1 << PB6))) {
+	_delay_ms(30);
+	if (!(PINB & (1 << PB6))) {
+		if (secInc == 0) {
+			if (sec == 59) {
+				sec = 0;
+				min++;
+			} else
+				sec++;
+
+			secInc = 1;
+		}
+
+	}
+
+} else
+	secInc = 0;
+}
+
+void secDecrement() {
+if (!(PINB & (1 << PB5))) {
+	_delay_ms(30);
+	if (!(PINB & (1 << PB5))) {
+		if (secDec == 0) {
+			if (sec != 0) {
+				sec--;
+			}
+			secDec = 1;
+		}
+
+	}
+
+} else
+	secDec = 0;
+}
+
+int main() {
+
+DDRA |= 0x3F;
+DDRB &= 0;
+DDRC |= 0xFF;
+DDRD |= 0x31;
+PORTB |= 0xFF;
+PORTC &= 0x00;
+PORTD |= (1 << PD6) | (1 << PD2) | (1 << PD4);
+SREG |= (1 << 7);
+
+Timer1_CTC_Init();
+Int0_init();
+Int1_init();
+Int2_init();
+
+while (1) {
+
+	if (!(PINB & (1 << PB7))) {
+		_delay_ms(30);
+		if (!(PINB & (1 << PB7))) {
+			if (modeFlag == 0) {
+				TCCR1B |= (1 << CS12) | (1 << CS10);
+				countDownFlag ^= (1 << 0);
+				PORTD ^= (1 << PD5);
+				PORTD ^= (1 << PD4);
+				modeFlag = 1;
+			}
+		}
+	} else
+		modeFlag = 0;
+
+	if (pauseFlag == 1) {
+		hrsIncrement();
+		hrsDecrement();
+		minIncrement();
+		minDecrement();
+		secIncrement();
+		secDecrement();
+	}
+	lap();
+	display_7Segment(sec % 10, 0);
+	_delay_ms(2);
+	display_7Segment(sec / 10, 1);
+	_delay_ms(2);
+	display_7Segment(min % 10, 2);
+	_delay_ms(2);
+	display_7Segment(min / 10, 3);
+	_delay_ms(2);
+	display_7Segment(hrs % 10, 4);
+	_delay_ms(2);
+	display_7Segment(hrs / 10, 5);
+	_delay_ms(2);
+
+}
+}
+
